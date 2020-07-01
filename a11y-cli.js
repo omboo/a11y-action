@@ -3,6 +3,7 @@ const pa11y = require("pa11y");
 
 module.exports = ({ urls, failOnError }) => {
   const logIssue = (issue) => {
+    core.debug(failOnError);
     if (failOnError) {
       core.setFailed(issue.message);
     } else {
@@ -31,6 +32,7 @@ module.exports = ({ urls, failOnError }) => {
       }
     });
   } catch (ex) {
+    core.debug(ex);
     throw ex;
   }
 };
