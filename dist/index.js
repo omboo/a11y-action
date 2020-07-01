@@ -65,11 +65,11 @@ const a11yCli = __webpack_require__(152);
 
 try {
   const urls = core.getInput("urls");
-  const failOnError = core.getInput("fail-on-error");
+  const failOnError = core.getInput("fail-on-error").toLowerCase() === "true";
 
   a11yCli({
-    urls: urls ? urls.split(",") : ["http://omboo.io"],
-    failOnError: failOnError || true,
+    urls: urls.split(","),
+    failOnError,
   });
 } catch (error) {
   core.setFailed(error.message);
@@ -86,6 +86,7 @@ const pa11y = __webpack_require__(982);
 
 module.exports = ({ urls, failOnError }) => {
   const logIssue = (issue) => {
+    core.debug(failOnError);
     if (failOnError) {
       core.setFailed(issue.message);
     } else {
@@ -114,6 +115,7 @@ module.exports = ({ urls, failOnError }) => {
       }
     });
   } catch (ex) {
+    core.debug(ex);
     throw ex;
   }
 };

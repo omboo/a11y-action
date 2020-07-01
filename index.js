@@ -4,7 +4,7 @@ const a11yCli = require("./a11y-cli");
 
 try {
   const urls = core.getInput("urls");
-  const failOnError = core.getInput("fail-on-error");
+  const failOnError = core.getInput("fail-on-error").toLowerCase() === "true";
 
   a11yCli({
     urls: urls.split(","),
