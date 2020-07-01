@@ -1,0 +1,16 @@
+name: Run accesibility (a11y) tests
+description: "Runs accesibility (a11y) tests for a set of urls"
+inputs:
+  fail-on-error:
+    description: "If true the action will fail if an error is found"
+    required: false
+    default: true
+  urls:
+    description: "The separated comma list of urls the tests should be executed against"
+    required: true
+    default: ""
+runs:
+  using: "docker"
+  image: "Dockerfile"
+  args:
+    - ${{ inputs.urls }}
