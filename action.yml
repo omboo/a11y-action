@@ -14,3 +14,4 @@ runs:
   image: "Dockerfile"
   args:
     - ${{ inputs.urls }}
+    - ${{ inputs.fail-on-error }}
