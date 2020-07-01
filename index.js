@@ -7,8 +7,8 @@ try {
   const failOnError = core.getInput("fail-on-error");
 
   a11yCli({
-    urls: urls ? urls.split(",") : ["http://omboo.io"],
-    failOnError: failOnError || true,
+    urls: urls.split(","),
+    failOnError,
   });
 } catch (error) {
   core.setFailed(error.message);
