@@ -7,7 +7,7 @@ const getBooleanInput = (name) => core.getInput(name).toLowerCase() === "true";
 try {
   const urls = core.getInput("urls");
   const failOnError = getBooleanInput("fail-on-error");
-  const waitOn = getInput("wait-on");
+  const waitOn = core.getInput("wait-on");
   const waitOnTimeout = parseFloat(core.getInput("wait-on-timeout"));
 
   a11yCli({
