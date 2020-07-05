@@ -1006,7 +1006,7 @@ const quote = __webpack_require__(531);
 
 const useYarn = () => fs.existsSync(yarnFilename);
 
-const install = () => {
+const installDeps = () => {
   // prevent lots of progress messages during install
   core.exportVariable("CI", "1");
 
@@ -1034,10 +1034,10 @@ const logIssue = (issue, failOnError) => {
   }
 };
 
-module.exports = async ({ urls, failOnError, needsInstall, startCommand }) => {
+module.exports = async ({ urls, failOnError, install, startCommand }) => {
   try {
-    if (needsInstall) {
-      await install();
+    if (install) {
+      await installDeps();
     }
 
     urls.forEach(async (url) => {
