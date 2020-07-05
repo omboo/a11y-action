@@ -25,14 +25,6 @@ const install = () => {
   }
 };
 
-const installMaybe = (shouldInstall) => {
-  if (!shouldInstall) {
-    return Promise.resolve();
-  }
-
-  return install();
-};
-
 const logIssue = (issue, failOnError) => {
   core.debug(failOnError);
   if (failOnError) {
@@ -42,9 +34,11 @@ const logIssue = (issue, failOnError) => {
   }
 };
 
-module.exports = async ({ urls, failOnError, install, startCommand }) => {
+module.exports = async ({ urls, failOnError, needsInstall, startCommand }) => {
   try {
-    await installMaybe(install);
+    if (needsInstall) {
+      await install();
+    }
 
     urls.forEach(async (url) => {
       const { pageUrl, issues } = await pa11y(url, {
