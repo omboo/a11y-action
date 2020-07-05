@@ -1,28 +1,42 @@
 const core = require("@actions/core");
 const exec = require("@actions/exec");
 const fs = require("fs");
+const got = require("got");
 const pa11y = require("pa11y");
 const quote = require("quote");
 
-const useYarn = () => fs.existsSync(yarnFilename);
+/**
+ * A small utility for checking when an URL responds, kind of
+ * a poor man's https://www.npmjs.com/package/wait-on
+ */
+const ping = (url, timeout) => {
+  const start = +new Date();
+  return got(url, {
+    retry: {
+      retries(retry, error) {
+        const now = +new Date();
+        core.debug(
+          `${now - start}ms ${error.method} ${error.host} ${error.code}`
+        );
+        if (now - start > timeout) {
+          console.error("%s timed out", url);
+          return 0;
+        }
+        return 1000;
+      },
+    },
+  });
+};
 
-const installDeps = () => {
-  // prevent lots of progress messages during install
-  core.exportVariable("CI", "1");
+const waitOnUrl = (waitOn, waitOnTimeout = 60) => {
+  core.debug(
+    'waiting on "%s" with timeout of %s seconds',
+    waitOn,
+    waitOnTimeout
+  );
 
-  if (useYarn()) {
-    core.debug("installing NPM dependencies using Yarn");
-    return io.which("yarn", true).then((yarnPath) => {
-      core.debug(`yarn at "${yarnPath}"`);
-      return exec.exec(quote(yarnPath), ["--frozen-lockfile"]);
-    });
-  } else {
-    core.debug("installing NPM dependencies");
-    return io.which("npm", true).then((npmPath) => {
-      core.debug(`npm at "${npmPath}"`);
-      return exec.exec(quote(npmPath));
-    });
-  }
+  const waitTimeoutMs = waitOnTimeout * 1000;
+  return ping(waitOn, waitTimeoutMs);
 };
 
 const logIssue = (issue, failOnError) => {
@@ -34,10 +48,10 @@ const logIssue = (issue, failOnError) => {
   }
 };
 
-module.exports = async ({ urls, failOnError, install, startCommand }) => {
+module.exports = async ({ urls, failOnError, waitOn, waitOnTimeout }) => {
   try {
-    if (install) {
-      await installDeps();
+    if (waitOn) {
+      await waitOnUrl(waitOn, waitOnTimeout);
     }
 
     urls.forEach(async (url) => {

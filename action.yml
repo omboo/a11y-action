@@ -9,19 +9,19 @@ inputs:
     description: "If true the action will fail if an error is found"
     required: false
     default: true
-  install:
-    description: "Whether or not to run install"
-    required: false
-    default: false
-  start-command:
-    description: "Command for starting local server in the background"
+  wait-on:
+    description: "The url we need to wait to run the tests against"
     required: false
     default: ""
+  wait-on-timeout:
+    description: "The amount of seconds we need to wait until the site is started"
+    required: false
+    default: 60
 runs:
   using: "docker"
   image: "Dockerfile"
   args:
     - ${{ inputs.urls }}
     - ${{ inputs.fail-on-error }}
-    - ${{ inputs.install }}
-    - ${{ inputs.start-command }}
+    - ${{ inputs.wait-on }}
+    - ${{ inputs.wait-on-timeout }}
