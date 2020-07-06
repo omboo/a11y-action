@@ -61,7 +61,7 @@ const runTests = async (urls, failOnError) => {
     });
 
     if (failed) {
-      throw new Error("Some tests have failed");
+      throw new Error("There are failing tests");
     }
   });
 };
@@ -91,7 +91,6 @@ module.exports = async ({
     process.exit(0);
   } catch (ex) {
     core.debug(ex);
-    core.setFailed(ex.message);
-    process.exit(1);
+    process.exit(failOnError ? 1 : 0);
   }
 };
