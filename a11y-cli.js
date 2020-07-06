@@ -34,25 +34,29 @@ const startServer = (startCommand) => {
   });
 };
 
-const runTests = (urls, failOnError) => {
-  urls.forEach(async (url) => {
-    const { pageUrl, issues } = await pa11y(url, {
+const runTests = async (urls, failOnError) => {
+  const promises = urls.map((url) => {
+    return pa11y(url, {
       chromeLaunchConfig: {
         args: ["--no-sandbox"],
       },
     });
+  });
 
-    if (issues.length) {
-      core.startGroup(pageUrl);
-    }
+  return await Promise.all(promises).then((tests) => {
+    tests.forEach(({ pageUrl, issues }) => {
+      if (issues.length) {
+        core.startGroup(pageUrl);
+      }
 
-    issues.forEach((issue) => {
-      logIssue(issue, failOnError);
+      issues.forEach((issue) => {
+        logIssue(issue, failOnError);
+      });
+
+      if (issues.length) {
+        core.endGroup();
+      }
     });
-
-    if (issues.length) {
-      core.endGroup();
-    }
   });
 };
 
@@ -76,7 +80,7 @@ module.exports = async ({
       });
     }
 
-    runTests(urls, failOnError);
+    await runTests(urls, failOnError);
 
     // Finish pending procceses
     process.exit(0);

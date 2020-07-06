@@ -2146,8 +2146,8 @@ const os = __importStar(__webpack_require__(87));
 const events = __importStar(__webpack_require__(614));
 const child = __importStar(__webpack_require__(129));
 const path = __importStar(__webpack_require__(622));
-const io = __importStar(__webpack_require__(1));
-const ioUtil = __importStar(__webpack_require__(672));
+const io = __importStar(__webpack_require__(194));
+const ioUtil = __importStar(__webpack_require__(408));
 /* eslint-disable @typescript-eslint/unbound-method */
 const IS_WINDOWS = process.platform === 'win32';
 /*
@@ -7531,25 +7531,29 @@ const startServer = (startCommand) => {
   });
 };
 
-const runTests = (urls, failOnError) => {
-  urls.forEach(async (url) => {
-    const { pageUrl, issues } = await pa11y(url, {
+const runTests = async (urls, failOnError) => {
+  const promises = urls.map((url) => {
+    return pa11y(url, {
       chromeLaunchConfig: {
         args: ["--no-sandbox"],
       },
     });
+  });
 
-    if (issues.length) {
-      core.startGroup(pageUrl);
-    }
+  return await Promise.all(promises).then((tests) => {
+    tests.forEach(({ pageUrl, issues }) => {
+      if (issues.length) {
+        core.startGroup(pageUrl);
+      }
 
-    issues.forEach((issue) => {
-      logIssue(issue, failOnError);
+      issues.forEach((issue) => {
+        logIssue(issue, failOnError);
+      });
+
+      if (issues.length) {
+        core.endGroup();
+      }
     });
-
-    if (issues.length) {
-      core.endGroup();
-    }
   });
 };
 
@@ -7573,7 +7577,7 @@ module.exports = async ({
       });
     }
 
-    runTests(urls, failOnError);
+    await runTests(urls, failOnError);
 
     // Finish pending procceses
     process.exit(0);
@@ -8257,7 +8261,302 @@ var WindowSubscriber = (function (_super) {
 /* 191 */,
 /* 192 */,
 /* 193 */,
-/* 194 */,
+/* 194 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const childProcess = __webpack_require__(129);
+const path = __webpack_require__(622);
+const util_1 = __webpack_require__(669);
+const ioUtil = __webpack_require__(408);
+const exec = util_1.promisify(childProcess.exec);
+/**
+ * Copies a file or folder.
+ * Based off of shelljs - https://github.com/shelljs/shelljs/blob/9237f66c52e5daa40458f94f9565e18e8132f5a6/src/cp.js
+ *
+ * @param     source    source path
+ * @param     dest      destination path
+ * @param     options   optional. See CopyOptions.
+ */
+function cp(source, dest, options = {}) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const { force, recursive } = readCopyOptions(options);
+        const destStat = (yield ioUtil.exists(dest)) ? yield ioUtil.stat(dest) : null;
+        // Dest is an existing file, but not forcing
+        if (destStat && destStat.isFile() && !force) {
+            return;
+        }
+        // If dest is an existing directory, should copy inside.
+        const newDest = destStat && destStat.isDirectory()
+            ? path.join(dest, path.basename(source))
+            : dest;
+        if (!(yield ioUtil.exists(source))) {
+            throw new Error(`no such file or directory: ${source}`);
+        }
+        const sourceStat = yield ioUtil.stat(source);
+        if (sourceStat.isDirectory()) {
+            if (!recursive) {
+                throw new Error(`Failed to copy. ${source} is a directory, but tried to copy without recursive flag.`);
+            }
+            else {
+                yield cpDirRecursive(source, newDest, 0, force);
+            }
+        }
+        else {
+            if (path.relative(source, newDest) === '') {
+                // a file cannot be copied to itself
+                throw new Error(`'${newDest}' and '${source}' are the same file`);
+            }
+            yield copyFile(source, newDest, force);
+        }
+    });
+}
+exports.cp = cp;
+/**
+ * Moves a path.
+ *
+ * @param     source    source path
+ * @param     dest      destination path
+ * @param     options   optional. See MoveOptions.
+ */
+function mv(source, dest, options = {}) {
+    return __awaiter(this, void 0, void 0, function* () {
+        if (yield ioUtil.exists(dest)) {
+            let destExists = true;
+            if (yield ioUtil.isDirectory(dest)) {
+                // If dest is directory copy src into dest
+                dest = path.join(dest, path.basename(source));
+                destExists = yield ioUtil.exists(dest);
+            }
+            if (destExists) {
+                if (options.force == null || options.force) {
+                    yield rmRF(dest);
+                }
+                else {
+                    throw new Error('Destination already exists');
+                }
+            }
+        }
+        yield mkdirP(path.dirname(dest));
+        yield ioUtil.rename(source, dest);
+    });
+}
+exports.mv = mv;
+/**
+ * Remove a path recursively with force
+ *
+ * @param inputPath path to remove
+ */
+function rmRF(inputPath) {
+    return __awaiter(this, void 0, void 0, function* () {
+        if (ioUtil.IS_WINDOWS) {
+            // Node doesn't provide a delete operation, only an unlink function. This means that if the file is being used by another
+            // program (e.g. antivirus), it won't be deleted. To address this, we shell out the work to rd/del.
+            try {
+                if (yield ioUtil.isDirectory(inputPath, true)) {
+                    yield exec(`rd /s /q "${inputPath}"`);
+                }
+                else {
+                    yield exec(`del /f /a "${inputPath}"`);
+                }
+            }
+            catch (err) {
+                // if you try to delete a file that doesn't exist, desired result is achieved
+                // other errors are valid
+                if (err.code !== 'ENOENT')
+                    throw err;
+            }
+            // Shelling out fails to remove a symlink folder with missing source, this unlink catches that
+            try {
+                yield ioUtil.unlink(inputPath);
+            }
+            catch (err) {
+                // if you try to delete a file that doesn't exist, desired result is achieved
+                // other errors are valid
+                if (err.code !== 'ENOENT')
+                    throw err;
+            }
+        }
+        else {
+            let isDir = false;
+            try {
+                isDir = yield ioUtil.isDirectory(inputPath);
+            }
+            catch (err) {
+                // if you try to delete a file that doesn't exist, desired result is achieved
+                // other errors are valid
+                if (err.code !== 'ENOENT')
+                    throw err;
+                return;
+            }
+            if (isDir) {
+                yield exec(`rm -rf "${inputPath}"`);
+            }
+            else {
+                yield ioUtil.unlink(inputPath);
+            }
+        }
+    });
+}
+exports.rmRF = rmRF;
+/**
+ * Make a directory.  Creates the full path with folders in between
+ * Will throw if it fails
+ *
+ * @param   fsPath        path to create
+ * @returns Promise<void>
+ */
+function mkdirP(fsPath) {
+    return __awaiter(this, void 0, void 0, function* () {
+        yield ioUtil.mkdirP(fsPath);
+    });
+}
+exports.mkdirP = mkdirP;
+/**
+ * Returns path of a tool had the tool actually been invoked.  Resolves via paths.
+ * If you check and the tool does not exist, it will throw.
+ *
+ * @param     tool              name of the tool
+ * @param     check             whether to check if tool exists
+ * @returns   Promise<string>   path to tool
+ */
+function which(tool, check) {
+    return __awaiter(this, void 0, void 0, function* () {
+        if (!tool) {
+            throw new Error("parameter 'tool' is required");
+        }
+        // recursive when check=true
+        if (check) {
+            const result = yield which(tool, false);
+            if (!result) {
+                if (ioUtil.IS_WINDOWS) {
+                    throw new Error(`Unable to locate executable file: ${tool}. Please verify either the file path exists or the file can be found within a directory specified by the PATH environment variable. Also verify the file has a valid extension for an executable file.`);
+                }
+                else {
+                    throw new Error(`Unable to locate executable file: ${tool}. Please verify either the file path exists or the file can be found within a directory specified by the PATH environment variable. Also check the file mode to verify the file is executable.`);
+                }
+            }
+        }
+        try {
+            // build the list of extensions to try
+            const extensions = [];
+            if (ioUtil.IS_WINDOWS && process.env.PATHEXT) {
+                for (const extension of process.env.PATHEXT.split(path.delimiter)) {
+                    if (extension) {
+                        extensions.push(extension);
+                    }
+                }
+            }
+            // if it's rooted, return it if exists. otherwise return empty.
+            if (ioUtil.isRooted(tool)) {
+                const filePath = yield ioUtil.tryGetExecutablePath(tool, extensions);
+                if (filePath) {
+                    return filePath;
+                }
+                return '';
+            }
+            // if any path separators, return empty
+            if (tool.includes('/') || (ioUtil.IS_WINDOWS && tool.includes('\\'))) {
+                return '';
+            }
+            // build the list of directories
+            //
+            // Note, technically "where" checks the current directory on Windows. From a toolkit perspective,
+            // it feels like we should not do this. Checking the current directory seems like more of a use
+            // case of a shell, and the which() function exposed by the toolkit should strive for consistency
+            // across platforms.
+            const directories = [];
+            if (process.env.PATH) {
+                for (const p of process.env.PATH.split(path.delimiter)) {
+                    if (p) {
+                        directories.push(p);
+                    }
+                }
+            }
+            // return the first match
+            for (const directory of directories) {
+                const filePath = yield ioUtil.tryGetExecutablePath(directory + path.sep + tool, extensions);
+                if (filePath) {
+                    return filePath;
+                }
+            }
+            return '';
+        }
+        catch (err) {
+            throw new Error(`which failed with message ${err.message}`);
+        }
+    });
+}
+exports.which = which;
+function readCopyOptions(options) {
+    const force = options.force == null ? true : options.force;
+    const recursive = Boolean(options.recursive);
+    return { force, recursive };
+}
+function cpDirRecursive(sourceDir, destDir, currentDepth, force) {
+    return __awaiter(this, void 0, void 0, function* () {
+        // Ensure there is not a run away recursive copy
+        if (currentDepth >= 255)
+            return;
+        currentDepth++;
+        yield mkdirP(destDir);
+        const files = yield ioUtil.readdir(sourceDir);
+        for (const fileName of files) {
+            const srcFile = `${sourceDir}/${fileName}`;
+            const destFile = `${destDir}/${fileName}`;
+            const srcFileStat = yield ioUtil.lstat(srcFile);
+            if (srcFileStat.isDirectory()) {
+                // Recurse
+                yield cpDirRecursive(srcFile, destFile, currentDepth, force);
+            }
+            else {
+                yield copyFile(srcFile, destFile, force);
+            }
+        }
+        // Change the mode for the newly created directory
+        yield ioUtil.chmod(destDir, (yield ioUtil.stat(sourceDir)).mode);
+    });
+}
+// Buffered file copy
+function copyFile(srcFile, destFile, force) {
+    return __awaiter(this, void 0, void 0, function* () {
+        if ((yield ioUtil.lstat(srcFile)).isSymbolicLink()) {
+            // unlink/re-link it
+            try {
+                yield ioUtil.lstat(destFile);
+                yield ioUtil.unlink(destFile);
+            }
+            catch (e) {
+                // Try to override file permission
+                if (e.code === 'EPERM') {
+                    yield ioUtil.chmod(destFile, '0666');
+                    yield ioUtil.unlink(destFile);
+                }
+                // other errors = it doesn't exist, no work to do
+            }
+            // Copy over symlink
+            const symlinkFull = yield ioUtil.readlink(srcFile);
+            yield ioUtil.symlink(symlinkFull, destFile, ioUtil.IS_WINDOWS ? 'junction' : null);
+        }
+        else if (!(yield ioUtil.exists(destFile)) || force) {
+            yield ioUtil.copyFile(srcFile, destFile);
+        }
+    });
+}
+//# sourceMappingURL=io.js.map
+
+/***/ }),
 /* 195 */,
 /* 196 */
 /***/ (function(__unusedmodule, exports, __webpack_require__) {
@@ -9796,7 +10095,7 @@ function localstorage() {
 /* 240 */
 /***/ (function(module) {
 
-module.exports = {"name":"@hapi/joi","description":"Object schema validation","version":"17.1.1","repository":"git://github.com/hapijs/joi","main":"lib/index.js","browser":"dist/joi-browser.min.js","files":["lib/**/*","dist/*"],"keywords":["schema","validation"],"dependencies":{"@hapi/address":"^4.0.1","@hapi/formula":"^2.0.0","@hapi/hoek":"^9.0.0","@hapi/pinpoint":"^2.0.0","@hapi/topo":"^5.0.0"},"devDependencies":{"@hapi/bourne":"2.x.x","@hapi/code":"8.x.x","@hapi/lab":"22.x.x","@hapi/joi-legacy-test":"npm:@hapi/joi@15.x.x"},"scripts":{"prepublishOnly":"cd browser && npm install && npm run build","test":"lab -t 100 -a @hapi/code -L","test-cov-html":"lab -r html -o coverage.html -a @hapi/code"},"license":"BSD-3-Clause"};
+module.exports = {"_from":"@hapi/joi@17.1.1","_id":"@hapi/joi@17.1.1","_inBundle":false,"_integrity":"sha512-p4DKeZAoeZW4g3u7ZeRo+vCDuSDgSvtsB/NpfjXEHTUjSeINAi/RrVOWiVQ1isaoLzMvFEhe8n5065mQq1AdQg==","_location":"/@hapi/joi","_phantomChildren":{},"_requested":{"type":"version","registry":true,"raw":"@hapi/joi@17.1.1","name":"@hapi/joi","escapedName":"@hapi%2fjoi","scope":"@hapi","rawSpec":"17.1.1","saveSpec":null,"fetchSpec":"17.1.1"},"_requiredBy":["/wait-on"],"_resolved":"https://registry.npmjs.org/@hapi/joi/-/joi-17.1.1.tgz","_shasum":"9cc8d7e2c2213d1e46708c6260184b447c661350","_spec":"@hapi/joi@17.1.1","_where":"/Users/admin/Projects/omboo/a11y-action/node_modules/wait-on","browser":"dist/joi-browser.min.js","bugs":{"url":"https://github.com/hapijs/joi/issues"},"bundleDependencies":false,"dependencies":{"@hapi/address":"^4.0.1","@hapi/formula":"^2.0.0","@hapi/hoek":"^9.0.0","@hapi/pinpoint":"^2.0.0","@hapi/topo":"^5.0.0"},"deprecated":false,"description":"Object schema validation","devDependencies":{"@hapi/bourne":"2.x.x","@hapi/code":"8.x.x","@hapi/joi-legacy-test":"npm:@hapi/joi@15.x.x","@hapi/lab":"22.x.x"},"files":["lib/**/*","dist/*"],"homepage":"https://github.com/hapijs/joi#readme","keywords":["schema","validation"],"license":"BSD-3-Clause","main":"lib/index.js","name":"@hapi/joi","repository":{"type":"git","url":"git://github.com/hapijs/joi.git"},"scripts":{"prepublishOnly":"cd browser && npm install && npm run build","test":"lab -t 100 -a @hapi/code -L","test-cov-html":"lab -r html -o coverage.html -a @hapi/code"},"version":"17.1.1"};
 
 /***/ }),
 /* 241 */,
@@ -12686,7 +12985,7 @@ module.exports = require("assert");
 /* 361 */
 /***/ (function(module) {
 
-module.exports = {"name":"axios","version":"0.19.2","description":"Promise based HTTP client for the browser and node.js","main":"index.js","scripts":{"test":"grunt test && bundlesize","start":"node ./sandbox/server.js","build":"NODE_ENV=production grunt build","preversion":"npm test","version":"npm run build && grunt version && git add -A dist && git add CHANGELOG.md bower.json package.json","postversion":"git push && git push --tags","examples":"node ./examples/server.js","coveralls":"cat coverage/lcov.info | ./node_modules/coveralls/bin/coveralls.js","fix":"eslint --fix lib/**/*.js"},"repository":{"type":"git","url":"https://github.com/axios/axios.git"},"keywords":["xhr","http","ajax","promise","node"],"author":"Matt Zabriskie","license":"MIT","bugs":{"url":"https://github.com/axios/axios/issues"},"homepage":"https://github.com/axios/axios","devDependencies":{"bundlesize":"^0.17.0","coveralls":"^3.0.0","es6-promise":"^4.2.4","grunt":"^1.0.2","grunt-banner":"^0.6.0","grunt-cli":"^1.2.0","grunt-contrib-clean":"^1.1.0","grunt-contrib-watch":"^1.0.0","grunt-eslint":"^20.1.0","grunt-karma":"^2.0.0","grunt-mocha-test":"^0.13.3","grunt-ts":"^6.0.0-beta.19","grunt-webpack":"^1.0.18","istanbul-instrumenter-loader":"^1.0.0","jasmine-core":"^2.4.1","karma":"^1.3.0","karma-chrome-launcher":"^2.2.0","karma-coverage":"^1.1.1","karma-firefox-launcher":"^1.1.0","karma-jasmine":"^1.1.1","karma-jasmine-ajax":"^0.1.13","karma-opera-launcher":"^1.0.0","karma-safari-launcher":"^1.0.0","karma-sauce-launcher":"^1.2.0","karma-sinon":"^1.0.5","karma-sourcemap-loader":"^0.3.7","karma-webpack":"^1.7.0","load-grunt-tasks":"^3.5.2","minimist":"^1.2.0","mocha":"^5.2.0","sinon":"^4.5.0","typescript":"^2.8.1","url-search-params":"^0.10.0","webpack":"^1.13.1","webpack-dev-server":"^1.14.1"},"browser":{"./lib/adapters/http.js":"./lib/adapters/xhr.js"},"typings":"./index.d.ts","dependencies":{"follow-redirects":"1.5.10"},"bundlesize":[{"path":"./dist/axios.min.js","threshold":"5kB"}]};
+module.exports = {"_from":"axios@0.19.2","_id":"axios@0.19.2","_inBundle":false,"_integrity":"sha512-fjgm5MvRHLhx+osE2xoekY70AhARk3a6hkN+3Io1jc00jtquGvxYlKlsFUhmUET0V5te6CcZI7lcv2Ym61mjHA==","_location":"/axios","_phantomChildren":{},"_requested":{"type":"version","registry":true,"raw":"axios@0.19.2","name":"axios","escapedName":"axios","rawSpec":"0.19.2","saveSpec":null,"fetchSpec":"0.19.2"},"_requiredBy":["/wait-on"],"_resolved":"https://registry.npmjs.org/axios/-/axios-0.19.2.tgz","_shasum":"3ea36c5d8818d0d5f8a8a97a6d36b86cdc00cb27","_spec":"axios@0.19.2","_where":"/Users/admin/Projects/omboo/a11y-action/node_modules/wait-on","author":{"name":"Matt Zabriskie"},"browser":{"./lib/adapters/http.js":"./lib/adapters/xhr.js"},"bugs":{"url":"https://github.com/axios/axios/issues"},"bundleDependencies":false,"bundlesize":[{"path":"./dist/axios.min.js","threshold":"5kB"}],"dependencies":{"follow-redirects":"1.5.10"},"deprecated":false,"description":"Promise based HTTP client for the browser and node.js","devDependencies":{"bundlesize":"^0.17.0","coveralls":"^3.0.0","es6-promise":"^4.2.4","grunt":"^1.0.2","grunt-banner":"^0.6.0","grunt-cli":"^1.2.0","grunt-contrib-clean":"^1.1.0","grunt-contrib-watch":"^1.0.0","grunt-eslint":"^20.1.0","grunt-karma":"^2.0.0","grunt-mocha-test":"^0.13.3","grunt-ts":"^6.0.0-beta.19","grunt-webpack":"^1.0.18","istanbul-instrumenter-loader":"^1.0.0","jasmine-core":"^2.4.1","karma":"^1.3.0","karma-chrome-launcher":"^2.2.0","karma-coverage":"^1.1.1","karma-firefox-launcher":"^1.1.0","karma-jasmine":"^1.1.1","karma-jasmine-ajax":"^0.1.13","karma-opera-launcher":"^1.0.0","karma-safari-launcher":"^1.0.0","karma-sauce-launcher":"^1.2.0","karma-sinon":"^1.0.5","karma-sourcemap-loader":"^0.3.7","karma-webpack":"^1.7.0","load-grunt-tasks":"^3.5.2","minimist":"^1.2.0","mocha":"^5.2.0","sinon":"^4.5.0","typescript":"^2.8.1","url-search-params":"^0.10.0","webpack":"^1.13.1","webpack-dev-server":"^1.14.1"},"homepage":"https://github.com/axios/axios","keywords":["xhr","http","ajax","promise","node"],"license":"MIT","main":"index.js","name":"axios","repository":{"type":"git","url":"git+https://github.com/axios/axios.git"},"scripts":{"build":"NODE_ENV=production grunt build","coveralls":"cat coverage/lcov.info | ./node_modules/coveralls/bin/coveralls.js","examples":"node ./examples/server.js","fix":"eslint --fix lib/**/*.js","postversion":"git push && git push --tags","preversion":"npm test","start":"node ./sandbox/server.js","test":"grunt test && bundlesize","version":"npm run build && grunt version && git add -A dist && git add CHANGELOG.md bower.json package.json"},"typings":"./index.d.ts","version":"0.19.2"};
 
 /***/ }),
 /* 362 */,
@@ -14308,7 +14607,207 @@ exports.concat = concat;
 
 /***/ }),
 /* 407 */,
-/* 408 */,
+/* 408 */
+/***/ (function(__unusedmodule, exports, __webpack_require__) {
+
+"use strict";
+
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var _a;
+Object.defineProperty(exports, "__esModule", { value: true });
+const assert_1 = __webpack_require__(357);
+const fs = __webpack_require__(747);
+const path = __webpack_require__(622);
+_a = fs.promises, exports.chmod = _a.chmod, exports.copyFile = _a.copyFile, exports.lstat = _a.lstat, exports.mkdir = _a.mkdir, exports.readdir = _a.readdir, exports.readlink = _a.readlink, exports.rename = _a.rename, exports.rmdir = _a.rmdir, exports.stat = _a.stat, exports.symlink = _a.symlink, exports.unlink = _a.unlink;
+exports.IS_WINDOWS = process.platform === 'win32';
+function exists(fsPath) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            yield exports.stat(fsPath);
+        }
+        catch (err) {
+            if (err.code === 'ENOENT') {
+                return false;
+            }
+            throw err;
+        }
+        return true;
+    });
+}
+exports.exists = exists;
+function isDirectory(fsPath, useStat = false) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const stats = useStat ? yield exports.stat(fsPath) : yield exports.lstat(fsPath);
+        return stats.isDirectory();
+    });
+}
+exports.isDirectory = isDirectory;
+/**
+ * On OSX/Linux, true if path starts with '/'. On Windows, true for paths like:
+ * \, \hello, \\hello\share, C:, and C:\hello (and corresponding alternate separator cases).
+ */
+function isRooted(p) {
+    p = normalizeSeparators(p);
+    if (!p) {
+        throw new Error('isRooted() parameter "p" cannot be empty');
+    }
+    if (exports.IS_WINDOWS) {
+        return (p.startsWith('\\') || /^[A-Z]:/i.test(p) // e.g. \ or \hello or \\hello
+        ); // e.g. C: or C:\hello
+    }
+    return p.startsWith('/');
+}
+exports.isRooted = isRooted;
+/**
+ * Recursively create a directory at `fsPath`.
+ *
+ * This implementation is optimistic, meaning it attempts to create the full
+ * path first, and backs up the path stack from there.
+ *
+ * @param fsPath The path to create
+ * @param maxDepth The maximum recursion depth
+ * @param depth The current recursion depth
+ */
+function mkdirP(fsPath, maxDepth = 1000, depth = 1) {
+    return __awaiter(this, void 0, void 0, function* () {
+        assert_1.ok(fsPath, 'a path argument must be provided');
+        fsPath = path.resolve(fsPath);
+        if (depth >= maxDepth)
+            return exports.mkdir(fsPath);
+        try {
+            yield exports.mkdir(fsPath);
+            return;
+        }
+        catch (err) {
+            switch (err.code) {
+                case 'ENOENT': {
+                    yield mkdirP(path.dirname(fsPath), maxDepth, depth + 1);
+                    yield exports.mkdir(fsPath);
+                    return;
+                }
+                default: {
+                    let stats;
+                    try {
+                        stats = yield exports.stat(fsPath);
+                    }
+                    catch (err2) {
+                        throw err;
+                    }
+                    if (!stats.isDirectory())
+                        throw err;
+                }
+            }
+        }
+    });
+}
+exports.mkdirP = mkdirP;
+/**
+ * Best effort attempt to determine whether a file exists and is executable.
+ * @param filePath    file path to check
+ * @param extensions  additional file extensions to try
+ * @return if file exists and is executable, returns the file path. otherwise empty string.
+ */
+function tryGetExecutablePath(filePath, extensions) {
+    return __awaiter(this, void 0, void 0, function* () {
+        let stats = undefined;
+        try {
+            // test file exists
+            stats = yield exports.stat(filePath);
+        }
+        catch (err) {
+            if (err.code !== 'ENOENT') {
+                // eslint-disable-next-line no-console
+                console.log(`Unexpected error attempting to determine if executable file exists '${filePath}': ${err}`);
+            }
+        }
+        if (stats && stats.isFile()) {
+            if (exports.IS_WINDOWS) {
+                // on Windows, test for valid extension
+                const upperExt = path.extname(filePath).toUpperCase();
+                if (extensions.some(validExt => validExt.toUpperCase() === upperExt)) {
+                    return filePath;
+                }
+            }
+            else {
+                if (isUnixExecutable(stats)) {
+                    return filePath;
+                }
+            }
+        }
+        // try each extension
+        const originalFilePath = filePath;
+        for (const extension of extensions) {
+            filePath = originalFilePath + extension;
+            stats = undefined;
+            try {
+                stats = yield exports.stat(filePath);
+            }
+            catch (err) {
+                if (err.code !== 'ENOENT') {
+                    // eslint-disable-next-line no-console
+                    console.log(`Unexpected error attempting to determine if executable file exists '${filePath}': ${err}`);
+                }
+            }
+            if (stats && stats.isFile()) {
+                if (exports.IS_WINDOWS) {
+                    // preserve the case of the actual file (since an extension was appended)
+                    try {
+                        const directory = path.dirname(filePath);
+                        const upperName = path.basename(filePath).toUpperCase();
+                        for (const actualName of yield exports.readdir(directory)) {
+                            if (upperName === actualName.toUpperCase()) {
+                                filePath = path.join(directory, actualName);
+                                break;
+                            }
+                        }
+                    }
+                    catch (err) {
+                        // eslint-disable-next-line no-console
+                        console.log(`Unexpected error attempting to determine the actual case of the file '${filePath}': ${err}`);
+                    }
+                    return filePath;
+                }
+                else {
+                    if (isUnixExecutable(stats)) {
+                        return filePath;
+                    }
+                }
+            }
+        }
+        return '';
+    });
+}
+exports.tryGetExecutablePath = tryGetExecutablePath;
+function normalizeSeparators(p) {
+    p = p || '';
+    if (exports.IS_WINDOWS) {
+        // convert slashes on Windows
+        p = p.replace(/\//g, '\\');
+        // remove redundant slashes
+        return p.replace(/\\\\+/g, '\\');
+    }
+    // remove redundant slashes
+    return p.replace(/\/\/+/g, '/');
+}
+// on Mac/Linux, test the execute bit
+//     R   W  X  R  W X R W X
+//   256 128 64 32 16 8 4 2 1
+function isUnixExecutable(stats) {
+    return ((stats.mode & 1) > 0 ||
+        ((stats.mode & 8) > 0 && stats.gid === process.getgid()) ||
+        ((stats.mode & 64) > 0 && stats.uid === process.getuid()));
+}
+//# sourceMappingURL=io-util.js.map
+
+/***/ }),
 /* 409 */,
 /* 410 */,
 /* 411 */
@@ -16285,6 +16784,7 @@ exports.codes = {
     DOMAIN_INVALID_CHARS: 'Domain contains invalid character',
     DOMAIN_INVALID_TLDS_CHARS: 'Domain contains invalid tld character',
     DOMAIN_SEGMENTS_COUNT: 'Domain lacks the minimum required number of segments',
+    DOMAIN_SEGMENTS_COUNT_MAX: 'Domain contains too many segments',
     DOMAIN_FORBIDDEN_TLDS: 'Domain uses forbidden TLD',
     DOMAIN_EMPTY_SEGMENT: 'Domain contains empty dot-separated segment',
     DOMAIN_LONG_SEGMENT: 'Domain contains dot-separated segment that is too long'
@@ -20112,6 +20612,12 @@ exports.analyze = function (domain, options = {}) {
     const segments = domain.split('.');
     if (segments.length < minDomainSegments) {
         return Errors.code('DOMAIN_SEGMENTS_COUNT');
+    }
+
+    if (options.maxDomainSegments) {
+        if (segments.length > options.maxDomainSegments) {
+            return Errors.code('DOMAIN_SEGMENTS_COUNT_MAX');
+        }
     }
 
     const tlds = options.tlds;
