@@ -6427,24 +6427,19 @@ const a11yCli = __webpack_require__(152);
 
 const getBooleanInput = (name) => core.getInput(name).toLowerCase() === "true";
 
-try {
-  const urls = core.getInput("urls");
-  const failOnError = getBooleanInput("fail-on-error");
-  const startCommand = core.getInput("start-command");
-  const waitOn = core.getInput("wait-on");
-  const waitOnTimeout = parseFloat(core.getInput("wait-on-timeout"));
+const urls = core.getInput("urls");
+const failOnError = getBooleanInput("fail-on-error");
+const startCommand = core.getInput("start-command");
+const waitOn = core.getInput("wait-on");
+const waitOnTimeout = parseFloat(core.getInput("wait-on-timeout"));
 
-  a11yCli({
-    urls: urls.split(","),
-    failOnError,
-    startCommand,
-    waitOn,
-    waitOnTimeout,
-  });
-} catch (error) {
-  core.setFailed(error.message);
-  process.exit(1);
-}
+a11yCli({
+  urls: urls.split(","),
+  failOnError,
+  startCommand,
+  waitOn,
+  waitOnTimeout,
+});
 
 
 /***/ }),
@@ -7589,7 +7584,8 @@ module.exports = async ({
     process.exit(0);
   } catch (ex) {
     core.debug(ex);
-    throw ex;
+    core.setFailed(ex.message);
+    process.exit(1);
   }
 };
 

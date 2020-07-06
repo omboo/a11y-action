@@ -91,6 +91,7 @@ module.exports = async ({
     process.exit(0);
   } catch (ex) {
     core.debug(ex);
-    throw ex;
+    core.setFailed(ex.message);
+    process.exit(1);
   }
 };
