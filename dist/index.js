@@ -7518,7 +7518,7 @@ const startServer = (startCommand) => {
     const argsString = toolArguments.join(" ");
     core.debug(`running ${quote(toolPath)} ${argsString} in ${cwd}`);
 
-    return exec.exec(quote(toolPath), toolArguments);
+    exec.exec(quote(toolPath), toolArguments);
   });
 };
 
