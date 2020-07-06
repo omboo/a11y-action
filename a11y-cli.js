@@ -7,6 +7,15 @@ const waitOnUrl = require("wait-on");
 const cliParser = require("argument-vector")();
 const pa11y = require("pa11y");
 
+const logIssue = (issue, failOnError) => {
+  core.debug(failOnError);
+  if (failOnError) {
+    core.setFailed(issue.message);
+  } else {
+    core.warning(issue.message);
+  }
+};
+
 const startServer = (startCommand) => {
   const cwd = process.cwd();
 
@@ -25,13 +34,26 @@ const startServer = (startCommand) => {
   });
 };
 
-const logIssue = (issue, failOnError) => {
-  core.debug(failOnError);
-  if (failOnError) {
-    core.setFailed(issue.message);
-  } else {
-    core.warning(issue.message);
-  }
+const runTests = (urls, failOnError) => {
+  urls.forEach(async (url) => {
+    const { pageUrl, issues } = await pa11y(url, {
+      chromeLaunchConfig: {
+        args: ["--no-sandbox"],
+      },
+    });
+
+    if (issues.length) {
+      core.startGroup(pageUrl);
+    }
+
+    issues.forEach((issue) => {
+      logIssue(issue, failOnError);
+    });
+
+    if (issues.length) {
+      core.endGroup();
+    }
+  });
 };
 
 module.exports = async ({
@@ -54,25 +76,10 @@ module.exports = async ({
       });
     }
 
-    urls.forEach(async (url) => {
-      const { pageUrl, issues } = await pa11y(url, {
-        chromeLaunchConfig: {
-          args: ["--no-sandbox"],
-        },
-      });
+    runTests(urls, failOnError);
 
-      if (issues.length) {
-        core.startGroup(pageUrl);
-      }
-
-      issues.forEach((issue) => {
-        logIssue(issue, failOnError);
-      });
-
-      if (issues.length) {
-        core.endGroup();
-      }
-    });
+    // Finish pending procceses
+    process.exit(0);
   } catch (ex) {
     core.debug(ex);
     throw ex;
