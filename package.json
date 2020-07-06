@@ -9,16 +9,28 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged"
+    }
+  },
+  "lint-staged": {
+    "*.{js,json,yml,md}": [
+      "prettier --write"
+    ]
+  },
   "dependencies": {
     "@actions/core": "^1.2.4",
     "@actions/exec": "^1.0.4",
-    "@actions/github": "^4.0.0",
     "@actions/io": "^1.0.2",
     "argument-vector": "^1.0.2",
     "quote": "^0.4.0",
     "wait-on": "^5.0.1"
   },
   "devDependencies": {
-    "@zeit/ncc": "^0.22.3"
+    "@zeit/ncc": "^0.22.3",
+    "husky": "^4.2.5",
+    "lint-staged": "^10.2.11",
+    "prettier": "^2.0.5"
   }
 }
