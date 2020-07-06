@@ -82,8 +82,10 @@ module.exports = async ({
 
     await runTests(urls, failOnError);
 
-    // Finish pending procceses
-    process.exit(0);
+    if (startCommand) {
+      // Finish pending procceses
+      process.exit(0);
+    }
   } catch (ex) {
     core.debug(ex);
     throw ex;
