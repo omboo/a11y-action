@@ -6443,6 +6443,7 @@ try {
   });
 } catch (error) {
   core.setFailed(error.message);
+  process.exit(1);
 }
 
 
@@ -7541,8 +7542,10 @@ const runTests = async (urls, failOnError) => {
   });
 
   return await Promise.all(promises).then((tests) => {
+    const failed = false;
     tests.forEach(({ pageUrl, issues }) => {
       if (issues.length) {
+        failed = true;
         core.startGroup(pageUrl);
       }
 
@@ -7554,6 +7557,10 @@ const runTests = async (urls, failOnError) => {
         core.endGroup();
       }
     });
+
+    if (failed) {
+      throw new Error("Some tests have failed");
+    }
   });
 };
 
@@ -7579,10 +7586,7 @@ module.exports = async ({
 
     await runTests(urls, failOnError);
 
-    if (startCommand) {
-      // Finish pending procceses
-      process.exit(0);
-    }
+    process.exit(0);
   } catch (ex) {
     core.debug(ex);
     throw ex;
