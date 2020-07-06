@@ -9,6 +9,10 @@ inputs:
     description: "If true the action will fail if an error is found"
     required: false
     default: true
+  start-command:
+    description: "The command to start the server"
+    required: false
+    default: ""
   wait-on:
     description: "The url we need to wait to run the tests against"
     required: false
@@ -23,5 +27,6 @@ runs:
   args:
     - ${{ inputs.urls }}
     - ${{ inputs.fail-on-error }}
+    - ${{ inputs.start-command }}
     - ${{ inputs.wait-on }}
     - ${{ inputs.wait-on-timeout }}
