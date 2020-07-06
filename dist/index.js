@@ -7537,7 +7537,7 @@ const runTests = async (urls, failOnError) => {
   });
 
   return await Promise.all(promises).then((tests) => {
-    const failed = false;
+    let failed = false;
     tests.forEach(({ pageUrl, issues }) => {
       if (issues.length) {
         failed = true;
